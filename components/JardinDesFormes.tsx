@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Flower, Wind } from 'lucide-react';
+import { Flower, Wind, CheckCircle2 } from 'lucide-react';
 import { Seed } from '../types';
 
 interface JardinProps {
@@ -9,6 +9,7 @@ interface JardinProps {
 const JardinDesFormes: React.FC<JardinProps> = ({ onCapture }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dominantHue, setDominantHue] = useState(0);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -122,7 +123,9 @@ const JardinDesFormes: React.FC<JardinProps> = ({ onCapture }) => {
   }, []);
 
   const handleCapture = () => {
-    if (onCapture) {
+    if (onCapture && !isCapturing) {
+      setIsCapturing(true);
+      
       // Créer une graine basée sur la couleur actuelle
       const seed: Seed = {
         id: Date.now().toString(),
@@ -130,6 +133,8 @@ const JardinDesFormes: React.FC<JardinProps> = ({ onCapture }) => {
         type: Math.random() > 0.5 ? 'dream' : 'wild',
         timestamp: Date.now()
       };
+      
+      // Le délai de transition est géré par App.tsx, ici on gère juste l'état visuel immédiat
       onCapture(seed);
     }
   };
@@ -138,7 +143,7 @@ const JardinDesFormes: React.FC<JardinProps> = ({ onCapture }) => {
     <div className="relative w-full h-full bg-void overflow-hidden flex flex-col group">
       
       {/* Interface Flottante */}
-      <div className="absolute top-6 left-6 z-10 pointer-events-none select-none">
+      <div className="absolute top-6 left-6 z-10 pointer-events-none select-none animate-fade-in-up">
         <h2 className="text-3xl font-serif text-starlight opacity-90 drop-shadow-md">Jardin des Formes</h2>
         <p className="text-aether/70 font-mono text-sm mt-2 flex items-center gap-2">
            <Wind size={14} className="animate-pulse"/>
@@ -146,16 +151,32 @@ const JardinDesFormes: React.FC<JardinProps> = ({ onCapture }) => {
         </p>
       </div>
 
-      {/* Bouton de Capture (Visible au survol ou toujours visible discrètement) */}
+      {/* Bouton de Capture */}
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20">
         <button 
           onClick={handleCapture}
-          className="flex items-center gap-3 px-8 py-4 bg-void/40 backdrop-blur-md border border-mystic/30 rounded-full text-mystic hover:bg-mystic hover:text-white transition-all duration-500 shadow-[0_0_20px_rgba(123,44,191,0.2)] hover:shadow-[0_0_40px_rgba(123,44,191,0.6)] group-hover:scale-105"
+          disabled={isCapturing}
+          className={`
+            flex items-center gap-3 px-8 py-4 rounded-full border transition-all duration-500 shadow-[0_0_20px_rgba(123,44,191,0.2)]
+            ${isCapturing 
+                ? 'bg-green-500/20 border-green-500/50 text-green-400 scale-105 cursor-default' 
+                : 'bg-void/40 backdrop-blur-md border-mystic/30 text-mystic hover:bg-mystic hover:text-white hover:shadow-[0_0_40px_rgba(123,44,191,0.6)] group-hover:scale-105'
+            }
+          `}
         >
-          <Flower className="w-5 h-5 animate-spin-slow" />
-          <span className="font-serif tracking-widest text-sm">CUEILLIR UNE ESSENCE</span>
+          {isCapturing ? (
+              <>
+                <CheckCircle2 className="w-5 h-5 animate-bounce" />
+                <span className="font-serif tracking-widest text-sm">ESSENCE CAPTURÉE</span>
+              </>
+          ) : (
+              <>
+                <Flower className="w-5 h-5 animate-spin-slow" />
+                <span className="font-serif tracking-widest text-sm">CUEILLIR UNE ESSENCE</span>
+              </>
+          )}
         </button>
-        <p className="text-center text-xs text-gray-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <p className={`text-center text-xs text-gray-500 mt-2 transition-opacity duration-300 ${isCapturing ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
           Pour la planter près d'Yggdrasil
         </p>
       </div>

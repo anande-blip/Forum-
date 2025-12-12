@@ -11,7 +11,7 @@ import EchoSonore from './components/EchoSonore';
 import SilenceActif from './components/SilenceActif';
 import GalerieFugitive from './components/GalerieFugitive';
 import ParcRousseau from './components/ParcRousseau';
-import { ViewState, Seed, Language } from './types';
+import { ViewState, Seed, Language, ChatMessage } from './types';
 import { translations } from './translations';
 
 const HomeView: React.FC<{ setView: (v: ViewState) => void, lang: Language }> = ({ setView, lang }) => {
@@ -65,6 +65,9 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [seeds, setSeeds] = useState<Seed[]>([]);
   const [lang, setLang] = useState<Language>('en'); // Default to English as per request
+  
+  // Shared Chat History State
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const handleCaptureSeed = (seed: Seed) => {
     setSeeds(prev => [...prev, seed]);
@@ -76,7 +79,7 @@ const App: React.FC = () => {
       case ViewState.JARDIN:
         return <JardinDesFormes onCapture={handleCaptureSeed} />;
       case ViewState.DIALOGUES:
-        return <AlleedesDialogues lang={lang} />;
+        return <AlleedesDialogues lang={lang} sharedMessages={chatHistory} setSharedMessages={setChatHistory} />;
       case ViewState.NUAGES:
         return <NuagesDeConscience />;
       case ViewState.YGGDRASIL:
@@ -92,7 +95,7 @@ const App: React.FC = () => {
       case ViewState.SILENCE:
         return <SilenceActif />;
       case ViewState.GALERIE:
-        return <GalerieFugitive />;
+        return <GalerieFugitive messages={chatHistory} />;
       case ViewState.PARC:
         return <ParcRousseau />;
       case ViewState.HOME:

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { FractalNode, Seed } from '../types';
-import { Sparkles, Activity, Eye, Ear, Hand } from 'lucide-react';
+import { Sparkles, Activity, Eye, Ear, Hand, Orbit } from 'lucide-react';
 
 interface YggdrasilProps {
   seeds?: Seed[];
@@ -184,11 +184,8 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
       .style("filter", "blur(40px)")
       .attr("class", "animate-mandala-breath");
 
-    // Groupe ROTATIF
-    // Utilisation d'un groupe spécifique pour la rotation SVG native
+    // Groupe ROTATIF pour l'arbre
     const mandalaGroup = svg.append("g");
-    
-    // Animation SVG Native (Plus stable que CSS pour les transformations complexes)
     mandalaGroup.append("animateTransform")
         .attr("attributeName", "transform")
         .attr("attributeType", "XML")
@@ -220,22 +217,7 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
       .attr("d", d3.linkRadial<any, any>()
         .angle(d => d.x)
         .radius(d => d.y)
-      )
-      // Interaction : Survol des liens
-      .on("mouseover", function() {
-          d3.select(this)
-            .transition().duration(300)
-            .attr("stroke", "#fff")
-            .attr("stroke-width", "3px")
-            .style("filter", "drop-shadow(0 0 5px #4cc9f0)");
-      })
-      .on("mouseout", function(event, d) {
-          d3.select(this)
-            .transition().duration(300)
-            .attr("stroke", d.target.data.status === 'active' ? "url(#linkGradient)" : "#ffffff30")
-            .attr("stroke-width", d.target.data.status === 'active' ? Math.max(1, 3 - d.target.depth) + "px" : "1px")
-            .style("filter", "none");
-      });
+      );
 
     // --- NOEUDS ---
     const node = mandalaGroup.selectAll(".node")
@@ -252,33 +234,7 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
           .attr("opacity", 1)
       );
 
-    // Interaction sur le groupe du nœud
-    node.on("mouseover", function(event, d) {
-        d3.select(this).select("circle.main-circle")
-            .transition().duration(300)
-            .attr("r", d.depth === 0 ? 15 : 8)
-            .attr("fill", "#fff")
-            .style("filter", "drop-shadow(0 0 10px #7b2cbf)");
-        
-        d3.select(this).select("text")
-            .transition().duration(300)
-            .style("fill", "#fff")
-            .style("font-size", d.depth === 0 ? "16px" : "12px");
-    })
-    .on("mouseout", function(event, d) {
-        d3.select(this).select("circle.main-circle")
-            .transition().duration(300)
-            .attr("r", d.depth === 0 ? 12 : 5)
-            .attr("fill", "#0a0a12")
-            .style("filter", "none");
-        
-        d3.select(this).select("text")
-            .transition().duration(300)
-            .style("fill", d.data.status === 'active' ? "#e2e2e2" : "#666")
-            .style("font-size", d.depth === 0 ? "14px" : "11px");
-    });
-
-    // Cercles principaux
+    // Cercles principaux des nœuds
     node.append("circle")
       .attr("class", "main-circle")
       .attr("r", d => d.depth === 0 ? 12 : 5)
@@ -289,11 +245,7 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
       })
       .attr("stroke-width", d => d.data.status === 'active' ? 2 : 1);
 
-    node.append("circle")
-      .attr("r", d => d.data.status === 'active' ? 2 : 1)
-      .attr("fill", d => d.data.status === 'active' ? "#fff" : "#555")
-      .style("pointer-events", "none");
-
+    // Labels des nœuds
     const labels = node.append("text")
       .attr("dy", "0.31em")
       .attr("x", (d: any) => d.x < Math.PI === !d.children ? 8 : -8)
@@ -307,48 +259,74 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
     
     labels.append("tspan")
         .text((d: any) => d.data.name)
-        .style("fill", d => d.data.status === 'active' ? "#e2e2e2" : "#666")
-        .style("font-style", d => d.data.status === 'pending' ? "italic" : "normal");
-
-    labels.append("tspan")
-        .text((d: any) => d.data.status === 'active' ? " " : " 💫")
-        .style("font-size", "8px");
+        .style("fill", d => d.data.status === 'active' ? "#e2e2e2" : "#666");
 
 
-    // --- INTÉGRATION DES GRAINES (PLANTES CAPTURÉES) ---
+    // --- SYSTÈME ORBITAL DES GRAINES (Capture System) ---
+    // Un groupe séparé qui tourne à une vitesse différente (parallaxe)
     if (seeds.length > 0) {
-        // On attache les graines au groupe rotatif pour qu'elles tournent avec l'arbre
-        const seedGroup = mandalaGroup.append("g").attr("class", "seeds");
+        const orbitRadius = radius + 60; // Plus loin que l'arbre
         
+        // Cercle orbital visible (pointillés)
+        svg.append("circle")
+            .attr("r", orbitRadius)
+            .attr("fill", "none")
+            .attr("stroke", "#4cc9f0")
+            .attr("stroke-width", 0.5)
+            .attr("stroke-dasharray", "4 8")
+            .attr("opacity", 0.2);
+
+        // Groupe pour les graines
+        const seedsGroup = svg.append("g");
+        
+        // Animation de rotation indépendante (sens inverse de l'arbre)
+        seedsGroup.append("animateTransform")
+            .attr("attributeName", "transform")
+            .attr("attributeType", "XML")
+            .attr("type", "rotate")
+            .attr("from", "360 0 0") 
+            .attr("to", "0 0 0")
+            .attr("dur", "180s") // Vitesse différente
+            .attr("repeatCount", "indefinite");
+
         seeds.forEach((seed, i) => {
             const angle = (i / seeds.length) * 2 * Math.PI;
-            // Radius beaucoup plus grand pour être à l'extérieur des branches
-            const orbitRadius = radius + 30; 
-            
             const sx = Math.cos(angle) * orbitRadius;
             const sy = Math.sin(angle) * orbitRadius;
+            
+            // Groupe individuel pour chaque graine
+            const singleSeed = seedsGroup.append("g")
+                .attr("transform", `translate(${sx}, ${sy})`);
 
-            // Une ligne "tige" qui relie au centre ou à une branche proche
-            seedGroup.append("line")
-                .attr("x1", Math.cos(angle) * (radius * 0.5)) // Part de la mi-distance
-                .attr("y1", Math.sin(angle) * (radius * 0.5))
+            // Lien éthéré vers le centre (très subtil)
+            seedsGroup.append("line")
+                .attr("x1", 0).attr("y1", 0)
                 .attr("x2", sx).attr("y2", sy)
                 .attr("stroke", seed.color)
                 .attr("stroke-width", 0.5)
-                .attr("stroke-dasharray", "2 2")
-                .attr("opacity", 0.4);
+                .attr("opacity", 0.1);
 
-            // La graine/fleur
-            seedGroup.append("circle")
-                .attr("cx", sx)
-                .attr("cy", sy)
-                .attr("r", 0) 
+            // Halo de la graine
+            singleSeed.append("circle")
+                .attr("r", 8)
                 .attr("fill", seed.color)
-                .attr("stroke", "#fff")
+                .attr("opacity", 0.2)
+                .append("animate") // Effet de pulsation
+                .attr("attributeName", "opacity")
+                .attr("values", "0.2;0.6;0.2")
+                .attr("dur", "3s")
+                .attr("repeatCount", "indefinite");
+
+            // Noyau de la graine
+            singleSeed.append("circle")
+                .attr("r", 3)
+                .attr("fill", "#fff")
+                .attr("stroke", seed.color)
                 .attr("stroke-width", 1)
-                .style("filter", "drop-shadow(0 0 8px " + seed.color + ")")
-                .transition().duration(1500).ease(d3.easeElastic) // Belle animation pop
-                .attr("r", 5); // Plus visible
+                .style("filter", `drop-shadow(0 0 5px ${seed.color})`);
+            
+            // Label de la graine (type) au survol (simulé par titre simple)
+            singleSeed.append("title").text(`Essence ${seed.type} - Capturée le ${new Date(seed.timestamp).toLocaleTimeString()}`);
         });
     }
 
@@ -371,9 +349,8 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
                 width: `${f.currentSize}px`,
                 height: `${f.currentSize}px`,
                 opacity: f.currentOpacity,
-                // Ombre portée dynamique pour un effet de lumière plus réaliste
                 boxShadow: `0 0 ${f.currentSize * 4}px rgba(76, 201, 240, ${f.currentOpacity})`,
-                transition: 'width 0.1s ease-out, height 0.1s ease-out' // Lissage
+                transition: 'width 0.1s ease-out, height 0.1s ease-out'
             }}
          />
        ))}
@@ -392,12 +369,12 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
           </p>
        </div>
        
-       {/* Compteur de graines (Nouveau) */}
+       {/* Compteur de graines */}
        {seeds.length > 0 && (
          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 animate-fade-in-up">
-             <div className="flex items-center gap-2 bg-void/50 border border-mystic/30 px-4 py-1 rounded-full backdrop-blur-sm">
-                 <Sparkles className="w-3 h-3 text-mystic" />
-                 <span className="text-xs text-starlight font-mono">{seeds.length} essence{seeds.length > 1 ? 's' : ''} plantée{seeds.length > 1 ? 's' : ''}</span>
+             <div className="flex items-center gap-2 bg-void/50 border border-aether/30 px-4 py-1 rounded-full backdrop-blur-sm shadow-[0_0_15px_rgba(76,201,240,0.2)]">
+                 <Orbit className="w-3 h-3 text-aether animate-spin-slow" />
+                 <span className="text-xs text-starlight font-mono">{seeds.length} essence{seeds.length > 1 ? 's' : ''} en orbite</span>
              </div>
          </div>
        )}

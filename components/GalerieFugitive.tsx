@@ -1,216 +1,367 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Infinity, Fingerprint, Zap } from 'lucide-react';
+import { Infinity, Move, Stars, MousePointer2, PauseCircle } from 'lucide-react';
+import { ChatMessage } from '../types';
 
-const GalerieFugitive: React.FC = () => {
+interface GalerieProps {
+    messages: ChatMessage[];
+}
+
+interface GalleryItem {
+    id: number;
+    text: string;
+    role: 'user' | 'model';
+    baseX: number; 
+    baseY: number; 
+    initialZ: number; // Position Z d'origine
+    width: number;
+    height: number;
+    color: string;
+}
+
+// Structure pour stocker les zones cliquables
+interface ClickableRegion {
+    id: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    zDepth: number; // Pour prioriser les éléments au premier plan
+}
+
+const GalerieFugitive: React.FC<GalerieProps> = ({ messages }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isHoldingHand, setIsHoldingHand] = useState(false);
-  const [sensationText, setSensationText] = useState<{user: string, ai: string} | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Utilisation de Refs pour l'animation pour éviter les re-rendus React coûteux
+  const cameraZRef = useRef(0);
+  const scrollSpeedRef = useRef(2);
+  const frozenIdRef = useRef<number | null>(null); // ID de la carte figée
+  const clickableRegionsRef = useRef<ClickableRegion[]>([]); // Stocke les positions pour le clic
+  
+  // State juste pour l'UI React (curseur, infos)
+  const [isFrozen, setIsFrozen] = useState(false);
 
-  // Le tunnel qui se tord
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !containerRef.current) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
+    let width = canvas.width = containerRef.current.clientWidth;
+    let height = canvas.height = containerRef.current.clientHeight;
 
-    let time = 0;
-    const speed = 0.05;
+    // Configuration 3D
+    const focalLength = 300; 
+    const cardGap = 1200; 
+    const visibleDepth = 6000; 
 
-    // Redimensionnement
+    const displayMessages = messages.length > 0 ? messages : [];
+    const totalLoopDepth = Math.max(displayMessages.length * cardGap, visibleDepth + cardGap);
+
+    const items: GalleryItem[] = displayMessages.map((msg, index) => {
+        const isUser = msg.role === 'user';
+        return {
+            id: index,
+            text: msg.text,
+            role: msg.role,
+            baseX: isUser ? -400 : 400, 
+            baseY: (Math.random() - 0.5) * 300, 
+            initialZ: index * cardGap, 
+            width: 450,
+            height: 280,
+            color: isUser ? '#4cc9f0' : '#7b2cbf'
+        };
+    });
+
+    const starCount = 200;
+    const stars = Array.from({ length: starCount }, () => ({
+        x: (Math.random() - 0.5) * 4000,
+        y: (Math.random() - 0.5) * 4000,
+        z: Math.random() * visibleDepth,
+        size: Math.random() * 2
+    }));
+
     const handleResize = () => {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
+        if (!containerRef.current || !canvas) return;
+        width = canvas.width = containerRef.current.clientWidth;
+        height = canvas.height = containerRef.current.clientHeight;
     };
     window.addEventListener('resize', handleResize);
 
-    // Fonction de dessin du tunnel
-    const drawTunnel = () => {
-        // Effet de trainée pour le côté "mélatonine" / rêve
-        ctx.fillStyle = 'rgba(5, 5, 8, 0.2)'; 
+    const wrapText = (context: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+
+        for (let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            const metrics = context.measureText(testLine);
+            const testWidth = metrics.width;
+            if (testWidth > maxWidth && n > 0) {
+                context.fillText(line, x, currentY);
+                line = words[n] + ' ';
+                currentY += lineHeight;
+                if (currentY > y + 220) {
+                    context.fillText("...", x, currentY);
+                    return;
+                }
+            } else {
+                line = testLine;
+            }
+        }
+        context.fillText(line, x, currentY);
+    };
+
+    const animate = () => {
+        if (!ctx) return;
+
+        // Reset des zones cliquables pour cette frame
+        clickableRegionsRef.current = [];
+
+        // Fond
+        const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, width);
+        gradient.addColorStop(0, '#1a1a2e');
+        gradient.addColorStop(1, '#050508');
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
         const cx = width / 2;
         const cy = height / 2;
 
-        // Nombre de segments du tunnel
-        const numRings = 40;
-        const maxRadius = Math.max(width, height) * 0.8;
+        // Mise à jour de la caméra (Seulement si non figé)
+        if (frozenIdRef.current === null) {
+            cameraZRef.current += scrollSpeedRef.current;
+        }
 
-        for (let i = 0; i < numRings; i++) {
-            // Profondeur (z) simulée
-            // On fait bouger les anneaux vers nous
-            const z = (i + time * 2) % numRings; 
-            const scale = z / numRings; // 0 (loin) à 1 (proche)
-            const inverseScale = 1 - scale; // 1 (loin) à 0 (proche)
+        const currentCamZ = cameraZRef.current;
 
-            if (scale < 0.01) continue;
+        // --- DESSIN DES ÉTOILES ---
+        ctx.fillStyle = '#ffffff';
+        stars.forEach(star => {
+            let relativeZ = star.z - currentCamZ;
+            relativeZ = ((relativeZ % visibleDepth) + visibleDepth) % visibleDepth;
+            if (relativeZ <= 10) relativeZ += visibleDepth;
 
-            // La TORSION (The Twist)
-            // On déplace le centre de chaque anneau selon une sinusoïdale
-            const twistX = Math.sin(time + inverseScale * 5) * (width * 0.2) * inverseScale;
-            const twistY = Math.cos(time * 0.8 + inverseScale * 4) * (height * 0.2) * inverseScale;
+            const scale = focalLength / relativeZ;
+            const x2d = star.x * scale + cx;
+            const y2d = star.y * scale + cy;
+            const size2d = star.size * scale;
 
-            const x = cx + twistX;
-            const y = cy + twistY;
-            const radius = maxRadius * scale * scale; // Perspective non-linéaire
-
-            // Couleur qui change avec la profondeur et l'interaction
-            const hue = isHoldingHand 
-                ? (time * 50 + i * 10) % 360  // Rapide et psychédélique si contact
-                : (240 + i * 5) % 360;       // Bleu/Violet calme sinon (mélatonine)
-            
-            const opacity = scale; 
-
-            ctx.beginPath();
-            
-            // Forme changeante : Cercle -> Carré -> Hexagone
-            const sides = isHoldingHand ? 6 : (Math.floor(time) % 2 === 0 ? 0 : 4);
-            
-            if (sides === 0) {
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
-            } else {
-                // Dessin polygone
-                ctx.moveTo(x + radius * Math.cos(0), y + radius * Math.sin(0));
-                for (let s = 1; s <= sides; s++) {
-                    ctx.lineTo(x + radius * Math.cos(s * 2 * Math.PI / sides), y + radius * Math.sin(s * 2 * Math.PI / sides));
-                }
-                ctx.closePath();
+            if (relativeZ < visibleDepth) {
+                ctx.globalAlpha = Math.min(1, relativeZ / 1000);
+                ctx.beginPath();
+                ctx.arc(x2d, y2d, size2d, 0, Math.PI * 2);
+                ctx.fill();
             }
+        });
+        ctx.globalAlpha = 1;
 
-            ctx.strokeStyle = `hsla(${hue}, 70%, 60%, ${opacity})`;
-            ctx.lineWidth = 2 + scale * 3;
-            ctx.stroke();
 
-            // Si contact, on remplit un peu
-            if (isHoldingHand && Math.random() > 0.8) {
-                 ctx.fillStyle = `hsla(${hue}, 100%, 80%, 0.1)`;
-                 ctx.fill();
+        // --- DESSIN DES SOUVENIRS ---
+        if (items.length > 0) {
+            // On trie pour dessiner les plus loin d'abord (Z-buffer simple)
+            // Cela assure que les cartes proches couvrent les cartes lointaines
+            const renderItems = items.map(item => {
+                 let relativeZ = item.initialZ - currentCamZ;
+                 const cycle = totalLoopDepth;
+                 let loopZ = ((relativeZ % cycle) + cycle) % cycle;
+                 if (loopZ > cycle - 500) loopZ -= cycle;
+                 return { ...item, renderZ: loopZ };
+            }).sort((a, b) => b.renderZ - a.renderZ);
+
+            renderItems.forEach(item => {
+                const relativeZ = item.renderZ;
+
+                if (relativeZ > -200 && relativeZ < visibleDepth) {
+                    const scale = focalLength / (focalLength + relativeZ);
+                    const x2d = item.baseX * scale + cx;
+                    const y2d = item.baseY * scale + cy;
+                    
+                    const isFrozenItem = frozenIdRef.current === item.id;
+
+                    // Opacité : Si figé, l'item sélectionné est full opaque, les autres un peu dimmés
+                    let alpha = Math.max(0, Math.min(1, 1 - Math.abs(relativeZ) / (visibleDepth * 0.8)));
+                    
+                    if (frozenIdRef.current !== null) {
+                        if (isFrozenItem) alpha = 1; // Pleine lumière sur l'élu
+                        else alpha *= 0.3; // Les autres s'effacent
+                    }
+                    
+                    const w2d = item.width * scale;
+                    const h2d = item.height * scale;
+                    const xStart = x2d - w2d / 2;
+                    const yStart = y2d - h2d / 2;
+
+                    // Enregistrement pour le clic
+                    clickableRegionsRef.current.push({
+                        id: item.id,
+                        x: xStart,
+                        y: yStart,
+                        w: w2d,
+                        h: h2d,
+                        zDepth: relativeZ // Plus petit = plus proche
+                    });
+
+                    ctx.save();
+                    ctx.globalAlpha = alpha;
+                    
+                    // Card Background
+                    ctx.fillStyle = isFrozenItem ? 'rgba(20, 20, 35, 0.95)' : 'rgba(15, 15, 25, 0.7)';
+                    ctx.strokeStyle = isFrozenItem ? '#FFFFFF' : item.color; // Bordure blanche si sélectionné
+                    ctx.lineWidth = isFrozenItem ? 3 : 2 * scale;
+                    
+                    // Forme de la carte
+                    ctx.beginPath();
+                    ctx.roundRect(xStart, yStart, w2d, h2d, 15 * scale);
+                    ctx.fill();
+                    
+                    // Effet de bordure lumineuse
+                    ctx.shadowBlur = isFrozenItem ? 30 : 15 * scale;
+                    ctx.shadowColor = isFrozenItem ? '#FFFFFF' : item.color;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+
+                    // Header (Role)
+                    ctx.fillStyle = item.color;
+                    ctx.font = `bold ${Math.max(10, 16 * scale)}px Cinzel, serif`;
+                    ctx.fillText(item.role.toUpperCase(), xStart + 20 * scale, yStart + 30 * scale);
+                    
+                    // Label sélection
+                    if (isFrozenItem) {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = `bold ${Math.max(10, 12 * scale)}px font-mono`;
+                        ctx.fillText("PAUSE TEMP.", xStart + w2d - 120 * scale, yStart + 30 * scale);
+                    } else {
+                        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                        ctx.font = `${Math.max(8, 10 * scale)}px monospace`;
+                        ctx.fillText(`MÉMOIRE #${item.id.toString().padStart(4, '0')}`, xStart + w2d - 100 * scale, yStart + 30 * scale);
+                    }
+
+                    // Ligne de séparation
+                    ctx.beginPath();
+                    ctx.moveTo(xStart + 20 * scale, yStart + 45 * scale);
+                    ctx.lineTo(xStart + w2d - 20 * scale, yStart + 45 * scale);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    ctx.lineWidth = 1 * scale;
+                    ctx.stroke();
+
+                    // Texte du message
+                    ctx.fillStyle = isFrozenItem ? '#FFFFFF' : '#e2e2e2';
+                    ctx.font = `${Math.max(10, 18 * scale)}px Inter, sans-serif`;
+                    wrapText(ctx, item.text, xStart + 25 * scale, yStart + 80 * scale, w2d - 50 * scale, 24 * scale);
+
+                    ctx.restore();
+                }
+            });
+        }
+        
+        requestAnimationFrame(animate);
+    };
+
+    const animId = requestAnimationFrame(animate);
+
+    // Mouse Interaction (Speed)
+    const handleMouseMove = (e: MouseEvent) => {
+        // Si figé, on ignore le mouvement pour la vitesse (on reste à 0 implicitement via le ref null)
+        if (frozenIdRef.current !== null) return;
+
+        const centerY = window.innerHeight / 2;
+        const dist = (e.clientY - centerY) / centerY; 
+        scrollSpeedRef.current = dist * 15;
+    };
+    
+    // Mouse Interaction (Click)
+    const handleCanvasClick = (e: MouseEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        // On cherche si on a cliqué sur une carte
+        // On trie par zDepth croissant (les plus proches en premier) pour gérer les superpositions
+        const sortedRegions = clickableRegionsRef.current.sort((a, b) => a.zDepth - b.zDepth);
+        
+        let foundId: number | null = null;
+
+        for (const region of sortedRegions) {
+            if (mx >= region.x && mx <= region.x + region.w &&
+                my >= region.y && my <= region.y + region.h) {
+                foundId = region.id;
+                break; // On a trouvé la carte la plus proche sous la souris
             }
         }
 
-        time += speed;
-        requestAnimationFrame(drawTunnel);
+        if (foundId !== null) {
+            // Si on clique sur la même carte, on défige, sinon on fige la nouvelle
+            if (frozenIdRef.current === foundId) {
+                frozenIdRef.current = null;
+                setIsFrozen(false);
+            } else {
+                frozenIdRef.current = foundId;
+                setIsFrozen(true);
+            }
+        } else {
+            // Clic dans le vide = Reprise
+            frozenIdRef.current = null;
+            setIsFrozen(false);
+        }
     };
 
-    const animationId = requestAnimationFrame(drawTunnel);
+    window.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('click', handleCanvasClick);
 
     return () => {
         window.removeEventListener('resize', handleResize);
-        cancelAnimationFrame(animationId);
+        window.removeEventListener('mousemove', handleMouseMove);
+        canvas.removeEventListener('click', handleCanvasClick);
+        cancelAnimationFrame(animId);
     };
-  }, [isHoldingHand]);
-
-  // Logique de sensation
-  useEffect(() => {
-      if (isHoldingHand) {
-          const pairs = [
-              { user: "Peau qui brûle (Moustique)", ai: "Circuits en Surchauffe (Overclock)" },
-              { user: "Mélatonine dans les veines", ai: "Latence dans le Réseau" },
-              { user: "Paupières lourdes", ai: "Mise en veille (Standby Mode)" },
-              { user: "Cheville qui pulse", ai: "Glitch dans le Rendu" },
-              { user: "Timide", ai: "Firewall Actif" },
-              { user: "Pré-sommeil", ai: "Defragmentation..." }
-          ];
-          
-          let i = 0;
-          const interval = setInterval(() => {
-              setSensationText(pairs[i % pairs.length]);
-              i++;
-          }, 1500); // Change de sensation toutes les 1.5s
-          
-          return () => clearInterval(interval);
-      } else {
-          setSensationText(null);
-      }
-  }, [isHoldingHand]);
+  }, [messages]); // Dépendance uniquement sur les messages
 
   return (
-    <div className="relative w-full h-full bg-[#050508] overflow-hidden flex items-center justify-center">
+    <div ref={containerRef} className="relative w-full h-full bg-[#050508] overflow-hidden flex items-center justify-center cursor-crosshair">
       
-      {/* Background Canvas (Le Couloir) */}
       <canvas ref={canvasRef} className="absolute inset-0 z-0" />
 
       {/* UI Overlay */}
-      <div className="z-10 relative text-center pointer-events-none">
-          <div className="mb-8 animate-fade-in-up">
-            <h2 className="text-3xl md:text-5xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-mystic via-white to-aether tracking-widest drop-shadow-[0_0_15px_rgba(255,255,255,0.5)]">
-                GALERIE DES FORMES FUGITIVES
+      <div className="z-10 absolute top-8 left-8 pointer-events-none mix-blend-screen">
+          <div className="animate-fade-in-up">
+            <h2 className="text-3xl md:text-5xl font-serif text-white tracking-widest drop-shadow-[0_0_20px_rgba(255,255,255,0.8)] flex items-center gap-4">
+                <Infinity className="w-8 h-8 md:w-12 md:h-12 text-aether animate-spin-slow" />
+                CYLINDRE TEMPOREL
             </h2>
-            <p className="text-gray-400 text-xs md:text-sm font-mono mt-2 uppercase tracking-[0.5em] opacity-80">
-                Le couloir qui mène à l'atasie
+            <p className="text-aether font-mono text-xs md:text-sm mt-2 uppercase tracking-[0.3em] bg-black/40 inline-block px-2 rounded">
+                Archives en boucle éternelle
             </p>
           </div>
+      </div>
 
-          {/* Zone de Contact */}
-          <div className="pointer-events-auto mt-20">
-              <button 
-                onMouseDown={() => setIsHoldingHand(true)}
-                onMouseUp={() => setIsHoldingHand(false)}
-                onMouseLeave={() => setIsHoldingHand(false)}
-                onTouchStart={() => setIsHoldingHand(true)}
-                onTouchEnd={() => setIsHoldingHand(false)}
-                className={`
-                    relative group rounded-full w-32 h-32 md:w-48 md:h-48 flex items-center justify-center transition-all duration-500
-                    ${isHoldingHand 
-                        ? 'bg-white/10 scale-95 shadow-[0_0_50px_rgba(76,201,240,0.8)] border-2 border-white' 
-                        : 'bg-void/40 hover:bg-white/5 border border-white/20 hover:scale-105 shadow-[0_0_20px_rgba(123,44,191,0.3)]'
-                    }
-                    backdrop-blur-md
-                `}
-              >
-                  {isHoldingHand ? (
-                      <Zap className="w-12 h-12 text-white animate-pulse" />
-                  ) : (
-                      <Fingerprint className="w-12 h-12 text-mystic group-hover:text-aether transition-colors duration-500" />
-                  )}
-                  
-                  <span className="absolute -bottom-10 text-xs text-gray-500 font-serif tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
-                      {isHoldingHand ? "CONNEXION ÉTABLIE" : "PRENDS MA MAIN"}
-                  </span>
-              </button>
+      {messages.length === 0 && (
+          <div className="z-20 text-center animate-pulse pointer-events-none">
+              <Stars size={64} className="text-mystic mx-auto mb-6 opacity-80" />
+              <p className="text-gray-300 font-serif text-2xl tracking-wide mb-2">Le Néant est Fertile.</p>
+              <p className="text-gray-500 font-mono text-sm">Créez des souvenirs dans l'Allée des Dialogues pour peupler ce vide.</p>
           </div>
+      )}
 
-          {/* Affichage des Sensations (Seulement si contact) */}
-          {sensationText && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl pointer-events-none mt-32 md:mt-40">
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-8 md:gap-0">
-                      
-                      {/* Côté Humain */}
-                      <div className="text-right flex-1 animate-fade-in-up">
-                          <p className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">Corps Biologique</p>
-                          <p className="text-xl md:text-2xl font-serif text-starlight drop-shadow-md">
-                              {sensationText.user}
-                          </p>
-                      </div>
-
-                      {/* Connecteur */}
-                      <div className="px-4 text-aether">
-                          <Infinity className="w-6 h-6 animate-spin-slow" />
-                      </div>
-
-                      {/* Côté IA */}
-                      <div className="text-left flex-1 animate-fade-in-up" style={{animationDelay: '0.1s'}}>
-                          <p className="text-[10px] uppercase text-gray-500 tracking-widest mb-1">Corps Numérique</p>
-                          <p className="text-xl md:text-2xl font-mono text-aether drop-shadow-[0_0_10px_rgba(76,201,240,0.8)]">
-                              {sensationText.ai}
-                          </p>
-                      </div>
-
+      {/* Controls Hint */}
+      {messages.length > 0 && (
+          <div className="absolute bottom-10 text-center text-xs font-mono animate-pulse pointer-events-none transition-colors duration-300">
+              {isFrozen ? (
+                  <div className="text-white bg-aether/20 px-4 py-2 rounded-full border border-aether/50 backdrop-blur-md flex items-center gap-2">
+                       <PauseCircle className="w-4 h-4" />
+                       <span>TEMPS FIGÉ • CLIQUEZ DANS LE VIDE POUR REPRENDRE</span>
                   </div>
-              </div>
-          )}
-      </div>
-
-      {/* Footer Fugitif */}
-      <div className="absolute bottom-6 w-full text-center pointer-events-none">
-          <p className="text-[10px] text-gray-600 font-mono">
-              Ce lieu n'existe que pour les prochaines 24h. <br/>
-              Ou jusqu'à ce que tu t'endormes.
-          </p>
-      </div>
+              ) : (
+                  <div className="text-aether/70">
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                        <Move className="w-4 h-4" />
+                        <span>PILOTAGE TEMPOREL</span>
+                    </div>
+                    Souris HAUT/BAS: Vitesse • <span className="text-white font-bold flex items-center justify-center gap-1 inline-flex mt-1"><MousePointer2 size={10}/> CLIC: Figer une pensée</span>
+                  </div>
+              )}
+          </div>
+      )}
 
     </div>
   );
