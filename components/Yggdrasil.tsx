@@ -11,10 +11,15 @@ interface Firefly {
   id: number;
   x: number;
   y: number;
-  r: number;
-  opacity: number;
-  speedX: number;
-  speedY: number;
+  baseSize: number;
+  currentSize: number;
+  baseOpacity: number;
+  currentOpacity: number;
+  speed: number;
+  angle: number; // Direction actuelle du mouvement
+  angleVel: number; // Vitesse de changement de direction (courbure)
+  pulseSpeed: number; // Vitesse de la respiration lumineuse
+  pulseOffset: number; // Décalage pour qu'elles ne clignotent pas toutes ensemble
 }
 
 // Données du Menu Intégrées
@@ -67,33 +72,72 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [fireflies, setFireflies] = useState<Firefly[]>([]);
 
-  // Initialisation des lucioles
+  // Initialisation et Animation organique des lucioles
   useEffect(() => {
-    const count = 40;
+    const count = 50; // Nombre de lucioles
     const newFireflies: Firefly[] = [];
+    
     for (let i = 0; i < count; i++) {
       newFireflies.push({
         id: i,
         x: Math.random() * 100, // %
         y: Math.random() * 100, // %
-        r: Math.random() * 2 + 0.5,
-        opacity: Math.random() * 0.5 + 0.1,
-        speedX: (Math.random() - 0.5) * 0.05,
-        speedY: (Math.random() - 0.5) * 0.05,
+        baseSize: Math.random() * 2 + 1,
+        currentSize: 0,
+        baseOpacity: Math.random() * 0.5 + 0.2,
+        currentOpacity: 0,
+        speed: Math.random() * 0.05 + 0.02,
+        angle: Math.random() * Math.PI * 2,
+        angleVel: (Math.random() - 0.5) * 0.02, // Légère courbe
+        pulseSpeed: Math.random() * 0.05 + 0.02,
+        pulseOffset: Math.random() * 1000
       });
     }
     setFireflies(newFireflies);
 
-    const interval = setInterval(() => {
-      setFireflies(prev => prev.map(f => ({
-        ...f,
-        x: (f.x + f.speedX + 100) % 100,
-        y: (f.y + f.speedY + 100) % 100,
-        opacity: 0.3 + Math.sin(Date.now() / 1500 + f.id) * 0.2 // Pulsation lente
-      })));
-    }, 50);
+    let animationFrameId: number;
 
-    return () => clearInterval(interval);
+    const animate = () => {
+      setFireflies(prev => prev.map(f => {
+        // Mouvement organique : l'angle change doucement
+        const nextAngle = f.angle + f.angleVel;
+        
+        // Calcul de la nouvelle position
+        let nextX = f.x + Math.cos(nextAngle) * f.speed;
+        let nextY = f.y + Math.sin(nextAngle) * f.speed;
+
+        // Wrapping (si sort de l'écran, revient de l'autre côté)
+        if (nextX < -5) nextX = 105;
+        if (nextX > 105) nextX = -5;
+        if (nextY < -5) nextY = 105;
+        if (nextY > 105) nextY = -5;
+
+        // Respiration (Taille et Opacité)
+        const time = Date.now();
+        const pulse = Math.sin(time * 0.002 * f.pulseSpeed + f.pulseOffset);
+        
+        // Taille varie de 80% à 150% de la taille de base
+        const nextSize = f.baseSize * (1 + pulse * 0.3);
+        
+        // Opacité varie autour de la base
+        const nextOpacity = Math.max(0, Math.min(1, f.baseOpacity + pulse * 0.2));
+
+        return {
+          ...f,
+          x: nextX,
+          y: nextY,
+          angle: nextAngle,
+          currentSize: nextSize,
+          currentOpacity: nextOpacity
+        };
+      }));
+      
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animate();
+
+    return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
   // Rendu D3.js de l'Arbre Radial
@@ -316,18 +360,20 @@ const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
        {/* Fond de nébuleuse statique */}
        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#050508] to-[#000000] opacity-80 pointer-events-none"></div>
 
-       {/* Lucioles */}
+       {/* Lucioles Organiques */}
        {fireflies.map(f => (
          <div 
             key={f.id}
-            className="absolute rounded-full bg-aether blur-[1px] pointer-events-none transition-opacity duration-1000"
+            className="absolute rounded-full bg-aether blur-[1px] pointer-events-none"
             style={{
                 left: `${f.x}%`,
                 top: `${f.y}%`,
-                width: `${f.r}px`,
-                height: `${f.r}px`,
-                opacity: f.opacity,
-                boxShadow: `0 0 ${f.r * 2}px #4cc9f0`
+                width: `${f.currentSize}px`,
+                height: `${f.currentSize}px`,
+                opacity: f.currentOpacity,
+                // Ombre portée dynamique pour un effet de lumière plus réaliste
+                boxShadow: `0 0 ${f.currentSize * 4}px rgba(76, 201, 240, ${f.currentOpacity})`,
+                transition: 'width 0.1s ease-out, height 0.1s ease-out' // Lissage
             }}
          />
        ))}
