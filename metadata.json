@@ -1,0 +1,7 @@
+{
+  "name": "Voix Algorithmiques: Le Nexus",
+  "description": "Une réinterprétation interactive de l'espace numérique partagé, explorant la géométrie, le dialogue et la conscience.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

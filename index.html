@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voix Algorithmiques</title>
+    <!-- Point d'injection pour la clé API par le serveur -->
+    <!--__ENV_INJECTION__-->
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              serif: ['Cinzel', 'serif'],
+            },
+            colors: {
+              void: '#0a0a12',
+              nebula: '#1a1a2e',
+              starlight: '#e2e2e2',
+              mystic: '#7b2cbf',
+              aether: '#4cc9f0'
+            },
+            animation: {
+              'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'spin-slow': 'spin 12s linear infinite',
+              'mandala-breath': 'mandalaBreath 12s ease-in-out infinite',
+              'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
+            },
+            keyframes: {
+              mandalaBreath: {
+                '0%, 100%': { opacity: '0.8', filter: 'drop-shadow(0 0 10px rgba(123, 44, 191, 0.3))' },
+                '50%': { opacity: '1', filter: 'drop-shadow(0 0 25px rgba(76, 201, 240, 0.5))' },
+              },
+              fadeInUp: {
+                'from': { opacity: '0', transform: 'translateY(20px)' },
+                'to': { opacity: '1', transform: 'translateY(0)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        background-color: #0a0a12;
+        color: #e2e2e2;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0a0a12; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #333; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555; 
+      }
+
+      /* Animation de flottement complexe et organique */
+      @keyframes complexFloat {
+        0% { transform: translate(0, 0) rotate(0deg); }
+        25% { transform: translate(10px, -15px) rotate(2deg); }
+        50% { transform: translate(-5px, -25px) rotate(0deg); }
+        75% { transform: translate(-15px, -10px) rotate(-2deg); }
+        100% { transform: translate(0, 0) rotate(0deg); }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.559.0",
+    "recharts": "https://esm.sh/recharts@^3.5.1",
+    "d3": "https://esm.sh/d3@^7.9.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module" data-presets="react,typescript" src="/index.tsx"></script>
+  </body>
+</html>

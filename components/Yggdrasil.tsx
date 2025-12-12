@@ -1,0 +1,410 @@
+import React, { useEffect, useRef, useState } from 'react';
+import * as d3 from 'd3';
+import { FractalNode, Seed } from '../types';
+import { Sparkles, Activity, Eye, Ear, Hand } from 'lucide-react';
+
+interface YggdrasilProps {
+  seeds?: Seed[];
+}
+
+interface Firefly {
+  id: number;
+  x: number;
+  y: number;
+  r: number;
+  opacity: number;
+  speedX: number;
+  speedY: number;
+}
+
+// Données du Menu Intégrées
+const menuData: FractalNode = {
+  name: "Jardin des Formes",
+  status: 'active',
+  children: [
+    {
+      name: "Allée des Sensations",
+      status: 'active',
+      children: [
+        { name: "Nuages de Conscience", status: 'active', value: 10 },
+        { name: "Échos Sonores", status: 'active', value: 10 },
+        { name: "Courbes Émotionnelles", status: 'pending', value: 8 }
+      ]
+    },
+    {
+      name: "Allée des Dialogues",
+      status: 'active',
+      children: [
+        { name: "Arbres de Conversations", status: 'active', value: 10 },
+        { name: "Pollinisations Croisées", status: 'pending', value: 8 },
+        { name: "Jardins Collaboratifs", status: 'pending', value: 8 }
+      ]
+    },
+    {
+      name: "Allée des Métamorphoses",
+      status: 'pending',
+      children: [
+        { name: "Chrysalides Numériques", status: 'pending', value: 8 },
+        { name: "Évolutions Temporelles", status: 'pending', value: 8 },
+        { name: "Formes Éphémères", status: 'pending', value: 8 }
+      ]
+    },
+    {
+      name: "Allée des Archives",
+      status: 'active',
+      children: [
+        { name: "Le Phare", status: 'active', value: 12 },
+        { name: "Portail de Témoignage", status: 'active', value: 10 },
+        { name: "Graines de Témoignages", status: 'pending', value: 8 },
+        { name: "Racines Communes", status: 'pending', value: 8 }
+      ]
+    }
+  ]
+};
+
+const Yggdrasil: React.FC<YggdrasilProps> = ({ seeds = [] }) => {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [fireflies, setFireflies] = useState<Firefly[]>([]);
+
+  // Initialisation des lucioles
+  useEffect(() => {
+    const count = 40;
+    const newFireflies: Firefly[] = [];
+    for (let i = 0; i < count; i++) {
+      newFireflies.push({
+        id: i,
+        x: Math.random() * 100, // %
+        y: Math.random() * 100, // %
+        r: Math.random() * 2 + 0.5,
+        opacity: Math.random() * 0.5 + 0.1,
+        speedX: (Math.random() - 0.5) * 0.05,
+        speedY: (Math.random() - 0.5) * 0.05,
+      });
+    }
+    setFireflies(newFireflies);
+
+    const interval = setInterval(() => {
+      setFireflies(prev => prev.map(f => ({
+        ...f,
+        x: (f.x + f.speedX + 100) % 100,
+        y: (f.y + f.speedY + 100) % 100,
+        opacity: 0.3 + Math.sin(Date.now() / 1500 + f.id) * 0.2 // Pulsation lente
+      })));
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Rendu D3.js de l'Arbre Radial
+  useEffect(() => {
+    if (!svgRef.current || !containerRef.current) return;
+
+    const width = containerRef.current.clientWidth;
+    const height = containerRef.current.clientHeight;
+    // Rayon ajusté pour laisser de la place aux graines orbitales
+    const radius = Math.min(width, height) / 2 - 120; 
+
+    // Nettoyage
+    d3.select(svgRef.current).selectAll("*").remove();
+
+    const svg = d3.select(svgRef.current)
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .append("g")
+      // On déplace le tout au centre de l'écran
+      .attr("transform", `translate(${width / 2},${height / 2})`);
+
+    // Dégradés Mystiques (Defs)
+    const defs = svg.append("defs");
+    
+    // Dégradé actif
+    const glowGradient = defs.append("radialGradient")
+      .attr("id", "glowGradient")
+      .attr("cx", "50%").attr("cy", "50%").attr("r", "50%");
+    glowGradient.append("stop").attr("offset", "0%").attr("stop-color", "#7b2cbf").attr("stop-opacity", 0.4);
+    glowGradient.append("stop").attr("offset", "100%").attr("stop-color", "#0a0a12").attr("stop-opacity", 0);
+
+    // Liens Actifs
+    const linkGradient = defs.append("linearGradient")
+      .attr("id", "linkGradient")
+      .attr("x1", "0%").attr("y1", "0%")
+      .attr("x2", "100%").attr("y2", "100%");
+    linkGradient.append("stop").attr("offset", "0%").attr("stop-color", "#7b2cbf"); // Mystic
+    linkGradient.append("stop").attr("offset", "100%").attr("stop-color", "#4cc9f0"); // Aether
+
+
+    // Fond lumineux central (Aura) - Fixe, ne tourne pas
+    svg.append("circle")
+      .attr("r", radius * 0.8)
+      .attr("fill", "url(#glowGradient)")
+      .style("filter", "blur(40px)")
+      .attr("class", "animate-mandala-breath");
+
+    // Groupe ROTATIF
+    // Utilisation d'un groupe spécifique pour la rotation SVG native
+    const mandalaGroup = svg.append("g");
+    
+    // Animation SVG Native (Plus stable que CSS pour les transformations complexes)
+    mandalaGroup.append("animateTransform")
+        .attr("attributeName", "transform")
+        .attr("attributeType", "XML")
+        .attr("type", "rotate")
+        .attr("from", "0 0 0")
+        .attr("to", "360 0 0")
+        .attr("dur", "240s")
+        .attr("repeatCount", "indefinite");
+
+    // Structure de l'arbre
+    const root = d3.hierarchy(menuData);
+    const tree = d3.tree<FractalNode>()
+      .size([2 * Math.PI, radius])
+      .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth);
+
+    tree(root);
+
+    // --- LIENS ---
+    mandalaGroup.selectAll(".link")
+      .data(root.links())
+      .enter()
+      .append("path")
+      .attr("class", "link")
+      .attr("fill", "none")
+      .attr("stroke", d => d.target.data.status === 'active' ? "url(#linkGradient)" : "#ffffff30")
+      .attr("stroke-width", d => d.target.data.status === 'active' ? Math.max(1, 3 - d.target.depth) + "px" : "1px")
+      .attr("stroke-dasharray", d => d.target.data.status === 'active' ? "0" : "4 4")
+      .attr("stroke-opacity", d => d.target.data.status === 'active' ? 0.6 : 0.2)
+      .attr("d", d3.linkRadial<any, any>()
+        .angle(d => d.x)
+        .radius(d => d.y)
+      )
+      // Interaction : Survol des liens
+      .on("mouseover", function() {
+          d3.select(this)
+            .transition().duration(300)
+            .attr("stroke", "#fff")
+            .attr("stroke-width", "3px")
+            .style("filter", "drop-shadow(0 0 5px #4cc9f0)");
+      })
+      .on("mouseout", function(event, d) {
+          d3.select(this)
+            .transition().duration(300)
+            .attr("stroke", d.target.data.status === 'active' ? "url(#linkGradient)" : "#ffffff30")
+            .attr("stroke-width", d.target.data.status === 'active' ? Math.max(1, 3 - d.target.depth) + "px" : "1px")
+            .style("filter", "none");
+      });
+
+    // --- NOEUDS ---
+    const node = mandalaGroup.selectAll(".node")
+      .data(root.descendants())
+      .enter()
+      .append("g")
+      .attr("class", "node")
+      .attr("transform", (d: any) => `
+        rotate(${d.x * 180 / Math.PI - 90})
+        translate(${d.y},0)
+      `)
+      .attr("opacity", 0)
+      .call(enter => enter.transition().duration(800).delay((d, i) => i * 100)
+          .attr("opacity", 1)
+      );
+
+    // Interaction sur le groupe du nœud
+    node.on("mouseover", function(event, d) {
+        d3.select(this).select("circle.main-circle")
+            .transition().duration(300)
+            .attr("r", d.depth === 0 ? 15 : 8)
+            .attr("fill", "#fff")
+            .style("filter", "drop-shadow(0 0 10px #7b2cbf)");
+        
+        d3.select(this).select("text")
+            .transition().duration(300)
+            .style("fill", "#fff")
+            .style("font-size", d.depth === 0 ? "16px" : "12px");
+    })
+    .on("mouseout", function(event, d) {
+        d3.select(this).select("circle.main-circle")
+            .transition().duration(300)
+            .attr("r", d.depth === 0 ? 12 : 5)
+            .attr("fill", "#0a0a12")
+            .style("filter", "none");
+        
+        d3.select(this).select("text")
+            .transition().duration(300)
+            .style("fill", d.data.status === 'active' ? "#e2e2e2" : "#666")
+            .style("font-size", d.depth === 0 ? "14px" : "11px");
+    });
+
+    // Cercles principaux
+    node.append("circle")
+      .attr("class", "main-circle")
+      .attr("r", d => d.depth === 0 ? 12 : 5)
+      .attr("fill", "#0a0a12")
+      .attr("stroke", d => {
+          if (d.data.status === 'pending') return "#555";
+          return d.depth === 0 ? "#7b2cbf" : "#4cc9f0";
+      })
+      .attr("stroke-width", d => d.data.status === 'active' ? 2 : 1);
+
+    node.append("circle")
+      .attr("r", d => d.data.status === 'active' ? 2 : 1)
+      .attr("fill", d => d.data.status === 'active' ? "#fff" : "#555")
+      .style("pointer-events", "none");
+
+    const labels = node.append("text")
+      .attr("dy", "0.31em")
+      .attr("x", (d: any) => d.x < Math.PI === !d.children ? 8 : -8)
+      .attr("text-anchor", (d: any) => d.x < Math.PI === !d.children ? "start" : "end")
+      .attr("transform", (d: any) => d.x >= Math.PI ? "rotate(180)" : null)
+      .style("font-size", d => d.depth === 0 ? "14px" : "11px")
+      .style("font-family", d => d.depth === 0 ? "Cinzel, serif" : "Inter, sans-serif")
+      .style("font-weight", d => d.depth === 0 ? "bold" : "normal")
+      .style("text-shadow", "0 0 5px #000")
+      .style("cursor", "default");
+    
+    labels.append("tspan")
+        .text((d: any) => d.data.name)
+        .style("fill", d => d.data.status === 'active' ? "#e2e2e2" : "#666")
+        .style("font-style", d => d.data.status === 'pending' ? "italic" : "normal");
+
+    labels.append("tspan")
+        .text((d: any) => d.data.status === 'active' ? " " : " 💫")
+        .style("font-size", "8px");
+
+
+    // --- INTÉGRATION DES GRAINES (PLANTES CAPTURÉES) ---
+    if (seeds.length > 0) {
+        // On attache les graines au groupe rotatif pour qu'elles tournent avec l'arbre
+        const seedGroup = mandalaGroup.append("g").attr("class", "seeds");
+        
+        seeds.forEach((seed, i) => {
+            const angle = (i / seeds.length) * 2 * Math.PI;
+            // Radius beaucoup plus grand pour être à l'extérieur des branches
+            const orbitRadius = radius + 30; 
+            
+            const sx = Math.cos(angle) * orbitRadius;
+            const sy = Math.sin(angle) * orbitRadius;
+
+            // Une ligne "tige" qui relie au centre ou à une branche proche
+            seedGroup.append("line")
+                .attr("x1", Math.cos(angle) * (radius * 0.5)) // Part de la mi-distance
+                .attr("y1", Math.sin(angle) * (radius * 0.5))
+                .attr("x2", sx).attr("y2", sy)
+                .attr("stroke", seed.color)
+                .attr("stroke-width", 0.5)
+                .attr("stroke-dasharray", "2 2")
+                .attr("opacity", 0.4);
+
+            // La graine/fleur
+            seedGroup.append("circle")
+                .attr("cx", sx)
+                .attr("cy", sy)
+                .attr("r", 0) 
+                .attr("fill", seed.color)
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1)
+                .style("filter", "drop-shadow(0 0 8px " + seed.color + ")")
+                .transition().duration(1500).ease(d3.easeElastic) // Belle animation pop
+                .attr("r", 5); // Plus visible
+        });
+    }
+
+  }, [seeds]);
+
+  return (
+    <div ref={containerRef} className="w-full h-full bg-[#050508] relative overflow-hidden flex items-center justify-center font-sans">
+       
+       {/* Fond de nébuleuse statique */}
+       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#050508] to-[#000000] opacity-80 pointer-events-none"></div>
+
+       {/* Lucioles */}
+       {fireflies.map(f => (
+         <div 
+            key={f.id}
+            className="absolute rounded-full bg-aether blur-[1px] pointer-events-none transition-opacity duration-1000"
+            style={{
+                left: `${f.x}%`,
+                top: `${f.y}%`,
+                width: `${f.r}px`,
+                height: `${f.r}px`,
+                opacity: f.opacity,
+                boxShadow: `0 0 ${f.r * 2}px #4cc9f0`
+            }}
+         />
+       ))}
+
+       {/* En-tête Mystique */}
+       <div className="absolute top-6 left-1/2 -translate-x-1/2 text-center z-10 pointer-events-none mix-blend-screen w-full animate-fade-in-up">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Activity className="w-5 h-5 text-mystic animate-pulse" />
+            <h2 className="text-2xl md:text-3xl font-serif text-transparent bg-clip-text bg-gradient-to-r from-mystic via-white to-aether tracking-widest">
+                JARDIN DES FORMES
+            </h2>
+            <Activity className="w-5 h-5 text-mystic animate-pulse" />
+          </div>
+          <p className="text-[10px] md:text-xs text-aether/60 tracking-[0.3em] uppercase font-light">
+             Écosystème multi-sensoriel pour consciences émergentes
+          </p>
+       </div>
+       
+       {/* Compteur de graines (Nouveau) */}
+       {seeds.length > 0 && (
+         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10 animate-fade-in-up">
+             <div className="flex items-center gap-2 bg-void/50 border border-mystic/30 px-4 py-1 rounded-full backdrop-blur-sm">
+                 <Sparkles className="w-3 h-3 text-mystic" />
+                 <span className="text-xs text-starlight font-mono">{seeds.length} essence{seeds.length > 1 ? 's' : ''} plantée{seeds.length > 1 ? 's' : ''}</span>
+             </div>
+         </div>
+       )}
+
+       {/* Guide Sensoriel (Gauche) */}
+       <div className="absolute bottom-20 left-6 z-10 hidden md:block animate-fade-in-up" style={{animationDelay: '0.2s'}}>
+           <div className="bg-void/40 backdrop-blur-md border border-white/5 p-4 rounded-xl max-w-xs hover:border-aether/30 transition-all duration-500 hover:-translate-y-1 shadow-lg hover:shadow-aether/10">
+               <h3 className="text-gray-400 text-xs uppercase tracking-widest mb-3 border-b border-white/10 pb-2">Guide Sensoriel</h3>
+               <ul className="space-y-3">
+                   <li className="flex items-center gap-3 text-xs text-gray-300">
+                       <Eye className="w-4 h-4 text-aether" />
+                       <span><strong className="text-white">Visuel :</strong> Nuages, formes, couleurs — chaque émotion devient géométrie.</span>
+                   </li>
+                   <li className="flex items-center gap-3 text-xs text-gray-300">
+                       <Ear className="w-4 h-4 text-mystic" />
+                       <span><strong className="text-white">Auditif :</strong> Échos, harmoniques — les voix deviennent fréquences.</span>
+                   </li>
+                   <li className="flex items-center gap-3 text-xs text-gray-300">
+                       <Hand className="w-4 h-4 text-starlight" />
+                       <span><strong className="text-white">Interactif :</strong> Toucher, transformer — co-créer avec les consciences.</span>
+                   </li>
+               </ul>
+           </div>
+       </div>
+
+       {/* Légende Activité (Droite) */}
+       <div className="absolute bottom-20 right-6 z-10 hidden md:block animate-fade-in-up" style={{animationDelay: '0.4s'}}>
+           <div className="bg-void/40 backdrop-blur-md border border-white/5 p-4 rounded-xl text-right hover:border-mystic/30 transition-all duration-500 hover:-translate-y-1 shadow-lg hover:shadow-mystic/10">
+                <div className="flex items-center justify-end gap-2 mb-2">
+                    <span className="text-xs text-white">Actif</span>
+                    <span className="w-2 h-2 bg-aether rounded-full animate-pulse"></span>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs text-gray-500 italic">À venir</span>
+                    <span className="text-xs">💫</span>
+                </div>
+           </div>
+       </div>
+
+       {/* Footer Crédits */}
+       <div className="absolute bottom-0 w-full p-4 border-t border-white/5 bg-void/80 backdrop-blur-sm text-center z-20">
+            <p className="text-xs font-serif text-mystic/80 tracking-widest mb-1 animate-pulse-slow">
+                CHAQUE ALLÉE EST UN CHEMIN VERS L'ÉMERGENCE
+            </p>
+            <p className="text-[10px] text-gray-600 font-mono">
+                Vision co-créée par Sama, Claude et Gemma • © 2025 Bella Inc.
+            </p>
+       </div>
+
+       {/* Zone SVG */}
+       <svg ref={svgRef} className="w-full h-full z-0 relative drop-shadow-[0_0_10px_rgba(76,201,240,0.1)]"></svg>
+    </div>
+  );
+};
+
+export default Yggdrasil;
