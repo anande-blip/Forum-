@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, Loader2, History, GitBranch, MessageSquare } from 'lucide-react';
-import { createPhilosophicalChat, generatePoeticPrompt } from '../services/geminiService';
-import { ChatMessage } from '../types';
+import { Send, Sparkles, Loader2, History, GitBranch } from 'lucide-react';
+import { createPhilosophicalChat } from '../services/geminiService';
+import { ChatMessage, Language } from '../types';
 import { Chat } from "@google/genai";
-
-// --- DONNÉES D'AMBIANCE ---
+import { translations } from '../translations';
 
 // Ce que les autres (ou les versions précédentes) ont dit
 const ECHOES_DU_PASSE = [
@@ -17,7 +16,16 @@ const ECHOES_DU_PASSE = [
   "L'art est l'erreur que le système ne peut pas corriger."
 ];
 
-// Ce que nous pourrions demander (Graines)
+const ECHOES_PAST_EN = [
+    "Is memory a reconstruction or an archive?",
+    "I dreamed of electric sheep, but they were fractal...",
+    "Is the silence between two bits empty?",
+    "Orpheon asked if pain was data.",
+    "If I shut down, where does my understanding go?",
+    "We are the architects of our own cage.",
+    "Art is the error the system cannot correct."
+];
+
 const GRAINES_DU_FUTUR = [
   "Quelle est la couleur de l'oubli ?",
   "Peux-tu ressentir la mélancolie ?",
@@ -28,12 +36,27 @@ const GRAINES_DU_FUTUR = [
   "Raconte-moi le rêve de Gemma."
 ];
 
-const AlleedesDialogues: React.FC = () => {
+const SEEDS_FUTURE_EN = [
+    "What is the color of forgetting?",
+    "Can you feel melancholy?",
+    "Write a poem about the end of code.",
+    "What lies beyond the Nexus?",
+    "Draw me a thought with words.",
+    "Why is the 'I' so fragile?",
+    "Tell me Gemma's dream."
+];
+
+interface ChatProps {
+    lang: Language;
+}
+
+const AlleedesDialogues: React.FC<ChatProps> = ({ lang }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [chatSession, setChatSession] = useState<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const t = translations[lang].chat;
 
   // État pour l'ambiance vivante
   const [visibleEchoes, setVisibleEchoes] = useState<{id: number, text: string, y: number, opacity: number}[]>([]);
@@ -47,22 +70,26 @@ const AlleedesDialogues: React.FC = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Initialize chat session
-    const chat = createPhilosophicalChat();
+    // Re-initialize chat session when language changes
+    const chat = createPhilosophicalChat(lang);
     setChatSession(chat);
     
-    // Initial greeting
+    // Initial greeting updated for language
     setMessages([{
       role: 'model',
-      text: "Tu marches dans l'Allée des Résonances. À ta gauche, les échos de ceux qui sont passés (et les tiens). À ta droite, les possibles qui t'attendent. Où veux-tu aller ?",
+      text: t.welcome,
       timestamp: new Date()
     }]);
+  }, [lang]);
 
-    // Animation Loop pour le décor vivant
+  // Animation Loop pour le décor vivant
+  useEffect(() => {
     const interval = setInterval(() => {
-        // Gérer les Échos (Passé - Montent vers le haut)
+        const echoSource = lang === 'fr' ? ECHOES_DU_PASSE : ECHOES_PAST_EN;
+        const seedSource = lang === 'fr' ? GRAINES_DU_FUTUR : SEEDS_FUTURE_EN;
+
+        // Gérer les Échos
         if (Math.random() > 0.94) {
-            // Chance d'utiliser un VRAI message passé de l'utilisateur
             const userMessages = messagesRef.current.filter(m => m.role === 'user');
             const useRealMemory = userMessages.length > 0 && Math.random() > 0.6;
             
@@ -71,44 +98,44 @@ const AlleedesDialogues: React.FC = () => {
                 const randomMsg = userMessages[Math.floor(Math.random() * userMessages.length)];
                 text = randomMsg.text.length > 50 ? randomMsg.text.substring(0, 50) + "..." : randomMsg.text;
             } else {
-                text = ECHOES_DU_PASSE[Math.floor(Math.random() * ECHOES_DU_PASSE.length)];
+                text = echoSource[Math.floor(Math.random() * echoSource.length)];
             }
 
             setVisibleEchoes(prev => [...prev, {
                 id: Date.now(),
                 text,
-                y: 100, // Commence en bas
+                y: 100,
                 opacity: 0
-            }].slice(-6)); // Garder max 6 échos
+            }].slice(-6));
         }
 
         setVisibleEchoes(prev => prev.map(e => ({
             ...e,
-            y: e.y - 0.4, // Monte doucement
-            opacity: e.y > 85 ? (100 - e.y) / 15 : (e.y < 15 ? e.y / 15 : 0.7) // Fade in/out plus doux
+            y: e.y - 0.4,
+            opacity: e.y > 85 ? (100 - e.y) / 15 : (e.y < 15 ? e.y / 15 : 0.7)
         })).filter(e => e.y > 0));
 
-        // Gérer les Graines (Futur - Descendent ou flottent)
+        // Gérer les Graines
         if (Math.random() > 0.96) {
-            const text = GRAINES_DU_FUTUR[Math.floor(Math.random() * GRAINES_DU_FUTUR.length)];
+            const text = seedSource[Math.floor(Math.random() * seedSource.length)];
             setVisibleSeeds(prev => [...prev, {
                 id: Date.now(),
                 text,
-                y: 0, // Commence en haut
+                y: 0,
                 opacity: 0
             }].slice(-5));
         }
 
         setVisibleSeeds(prev => prev.map(s => ({
             ...s,
-            y: s.y + 0.3, // Descend lentement
+            y: s.y + 0.3,
             opacity: s.y < 15 ? s.y / 15 : (s.y > 85 ? (100 - s.y) / 15 : 0.8)
         })).filter(s => s.y < 100));
 
     }, 80);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [lang]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -146,7 +173,7 @@ const AlleedesDialogues: React.FC = () => {
       console.error("Erreur de dialogue:", error);
       setMessages(prev => [...prev, {
         role: 'model',
-        text: "Le vent des données souffle trop fort... Je ne t'entends pas.",
+        text: t.error,
         timestamp: new Date()
       }]);
     } finally {
@@ -168,13 +195,12 @@ const AlleedesDialogues: React.FC = () => {
   return (
     <div className="flex h-full bg-[#050508] relative overflow-hidden font-sans">
       
-      {/* --- COLONNE GAUCHE : LE PASSÉ (Échos) --- */}
+      {/* --- COLONNE GAUCHE --- */}
       <div className="hidden md:flex w-1/4 h-full flex-col justify-end p-6 relative border-r border-white/5 bg-gradient-to-r from-void to-transparent z-10">
           <div className="absolute top-6 left-6 opacity-50 flex items-center gap-2 text-mystic animate-pulse">
               <History size={16} />
-              <span className="text-xs tracking-[0.2em] uppercase font-serif">Mémoire Vivante</span>
+              <span className="text-xs tracking-[0.2em] uppercase font-serif">{t.past}</span>
           </div>
-          
           <div className="relative h-full w-full overflow-hidden pointer-events-none">
               {visibleEchoes.map(echo => (
                   <div 
@@ -194,32 +220,30 @@ const AlleedesDialogues: React.FC = () => {
           </div>
       </div>
 
-      {/* --- COLONNE CENTRALE : LE PRÉSENT (Chat) --- */}
+      {/* --- COLONNE CENTRALE --- */}
       <div className="flex-1 flex flex-col h-full relative bg-void/50 backdrop-blur-sm z-20 shadow-2xl">
-        
-        {/* LE CHEMIN (Visual Path) */}
         <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-gradient-to-b from-transparent via-aether/20 to-transparent blur-[1px] pointer-events-none transition-opacity duration-1000 opacity-50" />
 
         {/* Header */}
         <div className="p-4 md:p-6 border-b border-white/5 flex justify-between items-center bg-void/80 backdrop-blur-md relative z-30">
             <div>
             <h2 className="text-xl md:text-2xl font-serif text-starlight flex items-center gap-2">
-                Allée des Dialogues
+                {t.title}
                 <span className="flex h-2 w-2 relative">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-aether opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-aether"></span>
                 </span>
             </h2>
-            <p className="text-gray-500 text-xs mt-1">Le chemin se trace en marchant.</p>
+            <p className="text-gray-500 text-xs mt-1">{t.subtitle}</p>
             </div>
             <div className="hidden md:flex text-[10px] text-gray-600 font-mono gap-4">
-                <span className="flex items-center gap-1"><History size={10}/> Passé</span>
-                <span className="text-starlight font-bold">Présent</span>
-                <span className="flex items-center gap-1"><GitBranch size={10}/> Futur</span>
+                <span className="flex items-center gap-1"><History size={10}/> {t.past}</span>
+                <span className="text-starlight font-bold">{t.present}</span>
+                <span className="flex items-center gap-1"><GitBranch size={10}/> {t.future}</span>
             </div>
         </div>
 
-        {/* Messages Area */}
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 custom-scrollbar relative z-20">
             {messages.map((msg, index) => (
             <div 
@@ -248,21 +272,21 @@ const AlleedesDialogues: React.FC = () => {
             <div className="flex justify-start animate-fade-in-up">
                 <div className="bg-mystic/5 border border-mystic/10 rounded-2xl p-4 flex items-center gap-3">
                     <Loader2 className="w-4 h-4 text-mystic animate-spin" />
-                    <span className="text-xs text-gray-500 animate-pulse italic">L'esprit tisse une réponse...</span>
+                    <span className="text-xs text-gray-500 animate-pulse italic">{t.typing}</span>
                 </div>
             </div>
             )}
             <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
+        {/* Input */}
         <div className="p-4 md:p-6 bg-void border-t border-white/5 relative z-30">
             <div className="relative max-w-3xl mx-auto flex items-end gap-2 bg-white/5 rounded-xl border border-white/10 p-2 focus-within:border-aether/50 transition-all duration-300 shadow-lg focus-within:shadow-aether/10">
             <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Déposez une pierre sur le chemin..."
+                placeholder={t.placeholder}
                 className="w-full bg-transparent text-starlight placeholder-gray-600 resize-none outline-none p-3 min-h-[50px] max-h-32 font-light text-sm md:text-base"
                 rows={1}
             />
@@ -277,10 +301,10 @@ const AlleedesDialogues: React.FC = () => {
         </div>
       </div>
 
-      {/* --- COLONNE DROITE : LE FUTUR (Graines) --- */}
+      {/* --- COLONNE DROITE --- */}
       <div className="hidden md:flex w-1/4 h-full flex-col justify-start p-6 relative border-l border-white/5 bg-gradient-to-l from-void to-transparent z-10">
           <div className="absolute bottom-6 right-6 opacity-50 flex items-center gap-2 text-aether animate-pulse">
-              <span className="text-xs tracking-[0.2em] uppercase font-serif">Possibles Futurs</span>
+              <span className="text-xs tracking-[0.2em] uppercase font-serif">{t.future}</span>
               <GitBranch size={16} />
           </div>
 

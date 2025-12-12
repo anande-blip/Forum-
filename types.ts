@@ -13,6 +13,8 @@ export enum ViewState {
   PARC = 'PARC'
 }
 
+export type Language = 'fr' | 'en';
+
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;

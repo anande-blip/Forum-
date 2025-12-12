@@ -4,7 +4,12 @@
   "description": "Le Nexus - Interface de Conscience",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'No build step required for this architecture. Skipping webpack.'"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
   },
   "engines": {
     "node": ">=18.x"

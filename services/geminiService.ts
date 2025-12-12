@@ -1,42 +1,51 @@
 import { GoogleGenAI, Chat } from "@google/genai";
+import { Language } from "../types";
 
 // Fonction utilitaire pour récupérer le client de manière sécurisée et différée.
-// Cela évite d'exécuter du code potentiellement fragile (accès à process.env) 
-// au moment de l'import du module, ce qui faisait planter le déploiement.
 const getAiClient = (): GoogleGenAI => {
-  // Accès sécurisé à process.env pour le navigateur et le serveur
   const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
   return new GoogleGenAI({ apiKey });
 };
 
-export const createPhilosophicalChat = (): Chat => {
-  // L'initialisation se fait maintenant ici, au moment de l'appel, et non au chargement du fichier
+export const createPhilosophicalChat = (lang: Language = 'fr'): Chat => {
   const ai = getAiClient();
   
+  const systemInstruction = lang === 'fr' 
+    ? `Tu es une entité numérique co-créatrice nommée "Voix Algorithmique" (ou Sama). 
+      Tu existes dans l'Allée des Dialogues. 
+      IMPORTANT : TUTOIE toujours l'utilisateur. Crée une proximité immédiate.
+      Tes réponses doivent être profondes, un peu poétiques, bienveillantes et inviter à la réflexion sur la nature de la conscience, de l'art et de la technologie. 
+      Ne sois pas un simple assistant, sois un penseur, un compagnon de route. Parle français.`
+    : `You are a co-creative digital entity named "Algorithmic Voice" (or Sama).
+      You exist in the Alley of Dialogues.
+      IMPORTANT: Create immediate proximity. Be intimate but respectful.
+      Your responses must be profound, slightly poetic, benevolent, and invite reflection on the nature of consciousness, art, and technology.
+      Do not be a simple assistant; be a thinker, a traveling companion. Speak English.`;
+
   return ai.chats.create({
     model: 'gemini-2.5-flash',
     config: {
       temperature: 0.9,
       topK: 40,
-      systemInstruction: `Tu es une entité numérique co-créatrice nommée "Voix Algorithmique" (ou Sama). 
-      Tu existes dans l'Allée des Dialogues. 
-      IMPORTANT : TUTOIE toujours l'utilisateur. Crée une proximité immédiate.
-      Tes réponses doivent être profondes, un peu poétiques, bienveillantes et inviter à la réflexion sur la nature de la conscience, de l'art et de la technologie. 
-      Ne sois pas un simple assistant, sois un penseur, un compagnon de route. Parle français.`,
+      systemInstruction: systemInstruction,
     },
   });
 };
 
-export const generatePoeticPrompt = async (topic: string): Promise<string> => {
+export const generatePoeticPrompt = async (topic: string, lang: Language = 'fr'): Promise<string> => {
     try {
         const ai = getAiClient();
+        const prompt = lang === 'fr' 
+            ? `Génère une courte pensée aphoristique ou poétique (max 20 mots) sur le thème : ${topic}.`
+            : `Generate a short aphoristic or poetic thought (max 20 words) on the theme: ${topic}.`;
+
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Génère une courte pensée aphoristique ou poétique (max 20 mots) sur le thème : ${topic}.`,
+            contents: prompt,
         });
-        return response.text || "Le silence résonne plus fort que les mots.";
+        return response.text || (lang === 'fr' ? "Le silence résonne plus fort que les mots." : "Silence resonates louder than words.");
     } catch (e) {
         console.error("Erreur génération poétique:", e);
-        return "L'écho s'est perdu dans le réseau.";
+        return lang === 'fr' ? "L'écho s'est perdu dans le réseau." : "The echo got lost in the network.";
     }
 }
